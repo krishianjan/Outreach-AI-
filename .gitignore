@@ -1,0 +1,34 @@
+# .gitignore
+
+# ── Secrets — NEVER commit these ─────────────────────────────────────────────
+.env
+.env.*
+*.env
+!.env.example          # allow committing the example template
+
+# ── Local DB and generated files ─────────────────────────────────────────────
+*.db
+*.db.bak
+outreach.log
+email_cache.json
+email_cache.json.bak
+
+# ── Frontend ──────────────────────────────────────────────────────────────────
+frontend/node_modules
+frontend/dist
+frontend/.env.local
+frontend/.env.development.local
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+.DS_Store

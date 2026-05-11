@@ -1,0 +1,37 @@
+# .dockerignore
+# These files are never sent to Docker build context.
+# Most importantly: .env is excluded so secrets NEVER end up in the image.
+
+# Secrets — NEVER include in Docker image
+.env
+.env.*
+*.env
+
+# Node dependencies (Stage 1 installs these fresh)
+frontend/node_modules
+node_modules
+
+# Local dev only
+frontend/.env.local
+frontend/.env.development.local
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+
+# Git
+.git
+.gitignore
+
+# Local DB and logs (clean slate in production)
+*.db
+*.db.bak
+outreach.log
+email_cache.json.bak
+
+# IDE
+.vscode
+.idea
+*.swp
