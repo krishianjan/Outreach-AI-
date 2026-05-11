@@ -1,12 +1,12 @@
 # ⚡ AI Outreach Platform
 
-> **End-to-end AI-powered professional outreach** — finds real contacts, verifies emails, generates personalised multi-day campaigns using LLMs, and tracks replies in a live pipeline.
+> **End-to-end AI-powered professional outreach**  finds real contacts, verifies emails, generates personalised multi-day campaigns using LLMs, and tracks replies in a live pipeline.
 
 **[🚀 Live Demo](https://huggingface.co/spaces/krishianjan/Outreach-AI)** · Built by [Krishi Anjan](https://linkedin.com/in/krishianjan)
 
 ---
 
-## In One Sentence
+## Objective /Goal
 
 An autonomous outreach engine that takes a company name → finds decision-maker emails via Hunter.io + multi-tier web scraping → verifies them via SMTP probing → routes to the optimal LLM (Gemini Flash or Groq) to generate a complete 4-email campaign grounded in the user's draft — all with per-session data isolation so multiple users can run it simultaneously from a single deployment.
 
