@@ -147,9 +147,9 @@ export default function Dashboard() {
         gridTemplateColumns: 'repeat(4, 1fr)', gap: 20
       }}>
         {[
-          { icon: <Users size={18} />, title: "1. Discover", desc: "Find decision-makers at any domain using AI search." },
+          { icon: <Users size={18} />, title: "1. Discover", desc: "Find Email Leads of decision-makers at any domain using AI search." },
           { icon: <Zap size={18} />, title: "2. Verify", desc: "Real-time SMTP checks to eliminate email bounces." },
-          { icon: <Mail size={18} />, title: "3. Personalize", desc: "Generate 4-day AI sequences tailored to their role." },
+          { icon: <Mail size={18} />, title: "3. Personalize", desc: "Generate a 4-day AI sequences tailored to their role." },
           { icon: <TrendingUp size={18} />, title: "4. Track", desc: "Manage your pipeline from lead to booked meeting." },
         ].map((step, i) => (
           <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
