@@ -128,55 +128,22 @@ def _build_user_prompt(
     elif previous_email and not is_followup:
         draft_section = f"\nUSER'S ROUGH DRAFT — extract every fact, skill, project, URL from this and use in the email:\n{previous_email}\n"
 
-    # Concrete example calibrated to this purpose
-    if purpose == 'job_seeker':
-        example = f"""
-EXAMPLE of the quality required (adapt facts for {company_name}):
+    # Short, focused example — long examples reduce model attention on the actual body
+    example = f"""
+REQUIRED OUTPUT FORMAT (write like this, not like a template):
 
 Hi {first_name},
 
-I've been following {company_name} since [specific thing about their product/mission] — [why that's impressive or relevant]. The problem you're solving around [specific domain] is genuinely hard to get right.
+[1-2 sentences about something specific you observed about {company_name} — their product, problem they solve, or something recent]
 
-I'm {sender_name or '[Name]'}, {sender_title or '[Title]'} at {sender_company or '[Company]'}. {f'I recently built {sender_projects.split()[0] if sender_projects else "[a relevant project]"} — [what it does and the result it achieved].' if sender_projects else '[Describe a specific project and its measurable result.]'} {f'My stack includes {sender_skills.split(",")[0].strip() if sender_skills else "[relevant tech]"} and [relevant tech #2].' if sender_skills else ''}
+[2-3 sentences: who you are + ONE concrete proof point from your background using the actual skills/projects/metrics above]
 
-Would a 15-minute call this week work? I'd love to hear what the engineering challenges look like right now.
+[1 sentence: clear ask — 15-min call this week]
 
 Best,
 {sender_name or '[Name]'}
 {sender_title or '[Title]'} | {sender_company or '[Company]'}
 {sender_projects.split()[0] if sender_projects else ''}"""
-
-    elif purpose == 'investor_pitch':
-        example = f"""
-EXAMPLE of the quality required:
-
-Hi {first_name},
-
-I noticed {company_name} recently [specific milestone or focus area] — [specific observation about their strategy or market position].
-
-I'm {sender_name or '[Name]'} from {sender_fund or sender_company or '[Fund]'}. {f'We backed {sender_portfolio.split(",")[0].strip() if sender_portfolio else "[notable company]"} early and have been actively looking at [relevant space].' if sender_fund or sender_portfolio else '[Describe your investment background with a specific example.]'} {f'Key metrics that caught my attention: {sender_metrics}.' if sender_metrics else ''}
-
-Would a 15-minute call this week work? Happy to share what we've seen in this space.
-
-Best,
-{sender_name or '[Name]'}
-{sender_title or 'Investor'} | {sender_fund or sender_company or '[Fund]'}"""
-
-    else:
-        example = f"""
-EXAMPLE of the quality required:
-
-Hi {first_name},
-
-I came across {company_name} while [specific context] — [specific thing about their work that's impressive or relevant to the sender].
-
-I'm {sender_name or '[Name]'}, {sender_title or '[Title]'} at {sender_company or '[Company]'}. [One specific proof point — project, metric, or result from the sender's background that is directly relevant to the recipient.]
-
-[One clear, easy ask — 15-min call, specific and low-friction.]
-
-Best,
-{sender_name or '[Name]'}
-{sender_title or '[Title]'} | {sender_company or '[Company]'}"""
 
     subject_hint_line = f"\nSubject hint from user (build on this): {sender_subject_hint}\n" if sender_subject_hint else ''
 

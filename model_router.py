@@ -67,13 +67,23 @@ def classify_task(
             'fallback_chain': ['gemini_pro', 'gemini_flash', 'groq'],
         }
 
-    # Real-time / high-speed tasks → Groq
-    if any(k in task_l for k in ['subject', 'follow-up', 'followup', 'follow up', 'quick', 'bump']):
+    # Real-time / high-speed tasks → Groq (short outputs only: subjects, bumps)
+    if any(k in task_l for k in ['subject', 'follow-up', 'followup', 'follow up', 'quick', 'bump', 'suggest']):
         return {
             'model': 'groq',
             'reason': 'real-time generation — speed priority',
             'task_key': 'subject_or_followup',
             'fallback_chain': ['groq', 'gemini_flash'],
+        }
+
+    # Email drafts → ALWAYS Gemini Flash (128k context, reliable JSON, better body quality)
+    # Groq is excluded from email draft fallback chain — it produces empty body fields
+    if any(k in task_l for k in ['email', 'draft', 'campaign', 'vip']):
+        return {
+            'model': 'gemini_flash',
+            'reason': 'email draft — Gemini required for reliable JSON body output',
+            'task_key': 'email_draft',
+            'fallback_chain': ['gemini_flash', 'gemini_pro'],  # Groq excluded intentionally
         }
 
     # Bulk operations → Flash (cheaper, handles context well)
