@@ -1,50 +1,30 @@
-# Dockerfile
-# Stage 1: Build React frontend
-# Stage 2: Python FastAPI backend serving the built frontend
-#
-# Result: ONE container, ONE URL, full-stack demo.
+# Stage 1: Build React Frontend
+FROM node:20-slim AS build-step
+WORKDIR /app/frontend
+COPY frontend/package.json frontend/pnpm-lock.yaml ./
+RUN npm install -g pnpm && pnpm install
+COPY frontend ./
+RUN pnpm build
 
-# ── Stage 1: Build React ───────────────────────────────────────────────────────
-FROM node:20-alpine AS frontend-builder
-
-WORKDIR /build
-
-# Install pnpm (project uses pnpm)
-RUN npm install -g pnpm@latest --quiet
-
-# Install JS dependencies
-COPY frontend/package.json ./
-COPY frontend/pnpm-lock.yaml* ./
-RUN pnpm install --no-frozen-lockfile
-
-# Copy source and build
-# VITE_API_URL="" → relative URL → same origin → no CORS needed in production
-COPY frontend/ .
-RUN VITE_API_URL="" pnpm build
-
-# ── Stage 2: Python runtime ────────────────────────────────────────────────────
+# Stage 2: Build Python Backend
 FROM python:3.11-slim
-
 WORKDIR /app
 
-# System dependencies for lxml, httpx, dns
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends gcc libffi-dev libxml2-dev libxslt-dev && \
-    rm -rf /var/lib/apt/lists/*
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
+    libxkbcommon0 libxcomposite1 libxdamage1 libxext6 libxfixes3 \
+    librandr2 libgbm1 libasound2 \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir --timeout 120 -r requirements.txt
+COPY Requirements.txt .
+RUN pip install --no-cache-dir -r Requirements.txt
+RUN pip install google-generativeai scrapegraphai httpx
 
-# Copy backend source (the .dockerignore excludes .env, node_modules, __pycache__)
 COPY . .
+COPY --from=build-step /app/frontend/dist ./frontend/dist
 
-# Copy the built React app from stage 1
-# This overwrites the empty frontend/dist/ directory with the real build
-COPY --from=frontend-builder /build/dist ./frontend/dist
+ENV DRY_RUN=false
+ENV PORT=7860
 
-# HF Spaces requires port 7860
-EXPOSE 7860
-
-# Start FastAPI (which serves both /api/* and the React frontend)
 CMD ["python", "api_routes.py"]
