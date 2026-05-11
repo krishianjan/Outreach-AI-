@@ -153,30 +153,38 @@ Best,
     if is_followup and previous_email and 'USER\'S ROUGH DRAFT' not in previous_email:
         followup_context = f"\nPREVIOUS EMAIL SENT (Day 0):\n{previous_email}\nThis is a follow-up sequence — reference the previous email, add new value.\n"
 
+    # Draft goes FIRST — most important signal for the model
+    draft_display = ''
+    if draft_section:
+        draft_display = f"""
+━━━ USER'S IDEA / ROUGH DRAFT (THIS IS THE CORE MESSAGE — build the email around this) ━━━
+{previous_email if not is_followup else ''}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+"""
+
     return f"""Write a complete, professional cold email campaign following your MANDATORY STRUCTURE.
 
-TARGET:
+{draft_display}TARGET:
 - Name: {first_name} {last_name}
 - Role: {position} at {company_name}
-- Company description: {description or 'not available — infer from company name'}
-- Key headlines/copy: {headlines or 'not available'}
+- Company: {description or f'{company_name} — research what they do from the company name'}
+- Headlines: {headlines or 'not available'}
 - Tech stack: {tech_hints or 'not available'}
-- Company LinkedIn: {linkedin_url or 'not available'}
 {subject_hint_line}
-SENDER — USE ALL OF THESE DETAILS IN THE EMAIL:
+SENDER (use only these REAL facts — never invent metrics, percentages, or results):
 {chr(10).join(sender_lines)}
 
 PURPOSE: {intent}
-{draft_section}{followup_context}
+{followup_context}
 REQUIREMENTS:
-1. Start body with EXACTLY: "Hi {first_name},"
-2. Para 1: Reference something SPECIFIC about {company_name} — their product, what problem they solve, a specific feature or market insight. If you don't have details, make an intelligent inference from the company name and description.
-3. Para 2: Use {sender_name}'s REAL background from the sender details above — actual skills, actual projects, actual metrics. NOT "I have experience in" — say WHAT you built and WHAT it achieved.
-4. Para 3: Single ask — 15-min call this week. Easy to say yes.
-5. Sign-off: {sender_name} / {sender_title} / {sender_company}{' / ' + sender_li if sender_li else ''}{' / ' + sender_projects.split()[0] if sender_projects else ''}
-6. Subject lines: must include "{company_name}" or a specific technology/role. Three variants: (a) curiosity/specific, (b) direct value, (c) question. NO generic phrases.
-7. P.S.: {'Use this real URL: ' + (sender_projects.split()[0] if sender_projects else sender_li) if (sender_projects or sender_li) else 'Leave ps_line as empty string — no fabricated URLs'}
-8. word_count field: count actual words in body
+1. Body starts with EXACTLY: "Hi {first_name},"
+2. Para 1: What {company_name} does and why their work is interesting — be specific and accurate. Use the company description above. If no description, infer intelligently from the name.
+3. Para 2: Sender's REAL background using ONLY the facts provided above. NEVER invent percentages, metrics, or achievements not mentioned. If projects listed, reference the actual project. If skills listed, name them specifically.
+4. Para 3: One ask — 15-min call. Make it easy.
+5. Sign-off: Full name, title, company, real URLs only.
+6. Subject lines: specific to {company_name} and what the sender offers. Reference the draft idea if provided. Zero generic phrases.
+7. P.S.: only if real GitHub/portfolio URL provided. Otherwise empty string.
 {example}"""
 
 
@@ -210,9 +218,11 @@ def _parse_sequence(result: dict, contact: dict) -> dict:
         body     = parsed.get('body', '')
         subjects = parsed.get('subject_lines', [])
 
-        # Guard: if body looks like raw JSON, the model put JSON inside body — reset
-        body_stripped = (body or '').strip()
-        if body_stripped.startswith('{') or body_stripped.startswith('['):
+        # Only reset body if it literally IS a JSON object (model put JSON inside body field)
+        # Don't reset for normal emails that might have code snippets or curly braces
+        body_check = (body or '').strip()
+        if body_check.startswith('{"subject_lines"') or body_check.startswith('{"body"'):
+            log.warning("Model put JSON inside body field — resetting")
             body = ''
 
         # If body is still empty, build a minimal placeholder the user can Enhance
@@ -261,7 +271,8 @@ def _parse_sequence(result: dict, contact: dict) -> dict:
     # ── Plain-text fallback ────────────────────────────────────────────────
     # Model returned plain text (not JSON). Use as body only if it's not JSON.
     log.warning("JSON parse failed entirely. model=%s raw_len=%d", model, len(raw))
-    safe_body = raw if raw and not raw.strip().startswith('{') else (
+    is_raw_json = raw.strip().startswith('{"subject_lines"') or raw.strip().startswith('{"body"')
+    safe_body = raw if (raw and not is_raw_json) else (
         f"Hi {fname},\n\n[Click ✨ Enhance to generate the email — model returned unexpected format]\n\nBest,\n[Name]"
     )
     fallback_subjects = [

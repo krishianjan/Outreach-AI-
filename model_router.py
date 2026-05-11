@@ -76,14 +76,14 @@ def classify_task(
             'fallback_chain': ['groq', 'gemini_flash'],
         }
 
-    # Email drafts → ALWAYS Gemini Flash (128k context, reliable JSON, better body quality)
-    # Groq is excluded from email draft fallback chain — it produces empty body fields
+    # Email drafts → Gemini Flash with Groq as fallback
+    # Groq excluded from primary but kept as last resort since it works in production
     if any(k in task_l for k in ['email', 'draft', 'campaign', 'vip']):
         return {
             'model': 'gemini_flash',
-            'reason': 'email draft — Gemini required for reliable JSON body output',
+            'reason': 'email draft — Gemini preferred, Groq as fallback',
             'task_key': 'email_draft',
-            'fallback_chain': ['gemini_flash', 'gemini_pro'],  # Groq excluded intentionally
+            'fallback_chain': ['gemini_flash', 'gemini_pro', 'groq'],
         }
 
     # Bulk operations → Flash (cheaper, handles context well)
@@ -162,18 +162,20 @@ def _call_gemini(
     system_prompt: str,
     user_prompt: str,
     model: str = 'gemini_flash',
-    max_tokens: int = 1000,
+    max_tokens: int = 1200,
 ) -> str:
-    """Call Gemini API with JSON mode enforced — eliminates all parsing failures."""
+    """Call Gemini. Tries JSON mode first; falls back to standard if unsupported."""
     try:
         import google.generativeai as genai
     except ImportError:
-        raise RuntimeError("google-generativeai not installed. Run: pip install google-generativeai")
+        raise RuntimeError("google-generativeai not installed.")
 
-    model_name = {
-        'gemini_flash': config.GEMINI_MODEL_FLASH,
-        'gemini_pro':   config.GEMINI_MODEL_PRO,
-    }.get(model, config.GEMINI_MODEL_FLASH)
+    # Use stable model IDs — preview models break JSON mode, use 1.5 which is confirmed stable
+    STABLE_MODELS = {
+        'gemini_flash': 'gemini-1.5-flash',   # stable, confirmed JSON mode support
+        'gemini_pro':   'gemini-1.5-pro',      # stable, confirmed JSON mode support
+    }
+    model_name = STABLE_MODELS.get(model, 'gemini-1.5-flash')
 
     if not config.GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY not set in .env")
@@ -183,18 +185,28 @@ def _call_gemini(
 
     genai.configure(api_key=config.GEMINI_API_KEY)
 
-    client = genai.GenerativeModel(
-        model_name=model_name,
-        system_instruction=system_prompt,
-        generation_config=genai.GenerationConfig(
-            max_output_tokens=max_tokens,
-            temperature=0.7,
-            response_mime_type="application/json",  # FORCES valid JSON — no fences, no preamble
-        ),
-    )
+    def _call(use_json_mode: bool) -> str:
+        cfg = {'max_output_tokens': max_tokens, 'temperature': 0.7}
+        if use_json_mode:
+            cfg['response_mime_type'] = 'application/json'
+        client = genai.GenerativeModel(
+            model_name=model_name,
+            system_instruction=system_prompt,
+            generation_config=cfg,
+        )
+        resp = client.generate_content(user_prompt)
+        text = resp.text if hasattr(resp, 'text') else ''
+        if not text or not text.strip():
+            raise ValueError("Empty response from Gemini")
+        return text
 
-    response = client.generate_content(user_prompt)
-    return response.text
+    # Try JSON mode first (forces valid JSON at API level)
+    try:
+        return _call(use_json_mode=True)
+    except Exception as e:
+        log.warning("Gemini JSON mode failed (%s) — retrying without JSON mode", e)
+        # Retry without JSON mode and parse manually
+        return _call(use_json_mode=False)
 
 
 def _call_groq(
