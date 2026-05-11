@@ -13,7 +13,7 @@ All fixes applied:
 import csv, io, json, os, re, time, urllib.parse, urllib.request
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -63,6 +63,10 @@ def _ok(data: dict) -> dict:
 
 def _err(msg: str, code: int = 400):
     raise HTTPException(status_code=code, detail={"success": False, "error": msg})
+
+def _sid(request: Request) -> str:
+    """Extract session ID from request header. Empty string = no session."""
+    return request.headers.get('X-Session-ID', '')
 
 
 def _normalize_contact(c: dict) -> dict:
@@ -140,8 +144,8 @@ def _find_domain_via_search(company: str, category_hint: str = "") -> tuple:
     return domain, 0.35
 
 
-def _build_real_activity(conn, limit: int = 8) -> list:
-    """Build activity feed entirely from DB — zero static/hardcoded data."""
+def _build_real_activity(conn, limit: int = 8, session_id: str = '') -> list:
+    """Build activity feed from DB — scoped to session_id so users see only their own."""
     ICONS = {
         "Hunter": "🎯", "Gemini": "✉️", "Groq": "⚡",
         "Scraper": "🕷️", "Lookup": "🔍",
@@ -153,36 +157,36 @@ def _build_real_activity(conn, limit: int = 8) -> list:
 
     items = []
 
-    # API usage events
-    api_rows = conn.execute(
-        "SELECT api_name, domain, endpoint, success, error_msg, ts "
-        "FROM api_usage ORDER BY ts DESC LIMIT 20"
-    ).fetchall()
+    # API usage — session scoped
+    if session_id:
+        api_rows = conn.execute(
+            "SELECT api_name, domain, endpoint, success, error_msg, ts "
+            "FROM api_usage WHERE session_id=? ORDER BY ts DESC LIMIT 20",
+            (session_id,)
+        ).fetchall()
+        lead_rows = conn.execute(
+            "SELECT email, domain, status, updated_at FROM leads WHERE session_id=? ORDER BY updated_at DESC LIMIT 10",
+            (session_id,)
+        ).fetchall()
+    else:
+        api_rows = []
+        lead_rows = []
+
     for r in api_rows:
         age = int(time.time() - r["ts"])
         t = f"{age}s ago" if age < 60 else f"{age//60}m ago" if age < 3600 else f"{age//3600}h ago"
         icon = ICONS.get(r["api_name"], "📊")
-        if r["success"]:
-            msg = f"{r['domain'] or 'system'} → {r['endpoint'] or r['api_name']} completed"
-        else:
-            err = (r["error_msg"] or "failed")[:40]
-            msg = f"{r['domain'] or 'system'} → {err}"
+        msg = f"{r['domain'] or 'system'} → {r['endpoint'] or r['api_name']} {'✓' if r['success'] else '✗'}"
         items.append({"icon": icon, "message": msg, "time_ago": t,
                       "success": bool(r["success"]), "ts": r["ts"]})
 
-    # Lead status events
-    lead_rows = conn.execute(
-        "SELECT email, domain, status, updated_at FROM leads ORDER BY updated_at DESC LIMIT 10"
-    ).fetchall()
     for lead in lead_rows:
         age = int(time.time() - lead["updated_at"])
         t = f"{age}s ago" if age < 60 else f"{age//60}m ago" if age < 3600 else f"{age//3600}h ago"
         icon = STATUS_ICONS.get(lead["status"], "📋")
-        msg = f"{lead['email']} → {lead['status']}"
-        items.append({"icon": icon, "message": msg, "time_ago": t,
-                      "success": True, "ts": lead["updated_at"]})
+        items.append({"icon": icon, "message": f"{lead['email']} → {lead['status']}",
+                      "time_ago": t, "success": True, "ts": lead["updated_at"]})
 
-    # Sort newest first
     items.sort(key=lambda x: x["ts"], reverse=True)
     for item in items:
         item.pop("ts", None)
@@ -265,10 +269,11 @@ def health():
 
 
 @router.get("/stats")
-def get_stats():
+def get_stats(request: Request):
+    session_id = _sid(request)
     try:
         with get_conn() as conn:
-            stats = get_dashboard_stats(conn)
+            stats = get_dashboard_stats(conn, session_id=session_id)
         from email_lookup.api_clients.hunter_client import get_budget_status
         budget = get_budget_status()
         import os
@@ -292,10 +297,11 @@ def get_stats():
 
 
 @router.get("/activity")
-def get_activity():
+def get_activity(request: Request):
+    session_id = _sid(request)
     try:
         with get_conn() as conn:
-            feed = _build_real_activity(conn, limit=8)
+            feed = _build_real_activity(conn, limit=8, session_id=session_id)
         return _ok({"activity": feed})
     except Exception as e:
         log.warning("/activity error: %s", e)
@@ -323,7 +329,8 @@ def find_domain(req: FindDomainRequest):
 
 
 @router.post("/lookup")
-def lookup(req: LookupRequest):
+def lookup(req: LookupRequest, request: Request):
+    session_id = _sid(request)
     """
     Find contacts for a company. If no domain provided, resolves it first.
     Returns contacts ranked by relevance to purpose.
@@ -353,7 +360,7 @@ def lookup(req: LookupRequest):
         with get_conn() as conn:
             log_api_call(conn, "Lookup", success=not bool(result.get("error")),
                          domain=domain, endpoint="domain_search",
-                         error=result.get("error", ""))
+                         error=result.get("error", ""), session_id=session_id)
     except Exception:
         pass
 
@@ -408,7 +415,8 @@ def add_manual_contact(req: ManualContactRequest):
 
 
 @router.post("/generate")
-def generate(req: GenerateRequest):
+def generate(req: GenerateRequest, request: Request):
+    session_id = _sid(request)
     """
     Generate full 4-day email campaign.
     If rough_draft provided, enhances it instead of writing from scratch.
@@ -477,6 +485,7 @@ def generate(req: GenerateRequest):
     try:
         with get_conn() as conn:
             lead_id = create_lead(conn, req.email, req.domain, req.purpose,
+                                  session_id=session_id,
                                   first_name=req.first_name, last_name=req.last_name,
                                   position=req.position)
             update_lead_status(conn, lead_id, "drafted")
@@ -490,7 +499,8 @@ def generate(req: GenerateRequest):
                     save_sequence(conn, lead_id, day, dd.get("subject", ""), dd["body"],
                                   model_used=seq.get("model_used", ""))
             log_api_call(conn, "Gemini", credits=1, domain=req.domain,
-                         model=seq.get("model_used", ""), endpoint="generate")
+                         model=seq.get("model_used", ""), endpoint="generate",
+                         session_id=session_id)
     except Exception as e:
         log.warning("Could not save lead to DB: %s", e)
 
@@ -605,12 +615,17 @@ def verify_single_email(body: dict):
 
 
 @router.get("/leads")
-def get_leads(status: Optional[str] = None, search: Optional[str] = None):
+def get_leads(request: Request, status: Optional[str] = None, search: Optional[str] = None):
+    session_id = _sid(request)
     try:
         with get_conn() as conn:
-            rows = conn.execute(
-                "SELECT * FROM leads ORDER BY updated_at DESC LIMIT 200"
-            ).fetchall()
+            if session_id:
+                rows = conn.execute(
+                    "SELECT * FROM leads WHERE session_id=? ORDER BY updated_at DESC LIMIT 200",
+                    (session_id,)
+                ).fetchall()
+            else:
+                rows = []
         leads = [dict(r) for r in rows]
         if status and status != "all":
             leads = [l for l in leads if l.get("status") == status]

@@ -201,6 +201,25 @@ export default function Outreach() {
     }
   };
 
+  const handleClear = () => {
+    // Clear all session state — start fresh search
+    ['company', 'domain', 'contacts', 'selected', 'sequence'].forEach(k =>
+      sessionStorage.removeItem(`os_${k}`)
+    );
+    setCompanyName('');
+    setDomain('');
+    setContacts([]);
+    setSelected(null);
+    setNeedsManual(false);
+    setVerifyResult(null);
+    setSequence(null);
+    setSuggestions([]);
+    setChatMsgs([]);
+    setRoughDraft('');
+    setSubjectHint('');
+    setManualFirst(''); setManualLast(''); setManualRole('');
+  };
+
   const handleManualAdd = async () => {
     if (!manualFirst.trim()) return;
     try {
@@ -465,12 +484,29 @@ export default function Outreach() {
               color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
               opacity: (!companyName.trim() || loadingFind) ? 0.55 : 1,
-              marginBottom: 20, transition: 'opacity 0.2s',
+              marginBottom: contacts.length > 0 ? 8 : 20, transition: 'opacity 0.2s',
             }}>
             {loadingFind
               ? <><Loader2 size={16} className="animate-spin" />Finding contacts…</>
               : <><Search size={16} />Find Contacts</>}
           </button>
+
+          {/* Clear / new search button — only show when there are results */}
+          {(contacts.length > 0 || needsManual) && !loadingFind && (
+            <button
+              onClick={handleClear}
+              style={{
+                width: '100%', padding: '8px', borderRadius: 8, marginBottom: 16,
+                border: '1px solid var(--border-custom)', background: 'transparent',
+                color: 'var(--text-muted)', fontSize: 13, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-secondary)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--color-slate)'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border-custom)'; }}>
+              <X size={14} /> New Search
+            </button>
+          )}
         </div>
 
         {/* Skeleton */}

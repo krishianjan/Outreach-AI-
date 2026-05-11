@@ -190,15 +190,30 @@ def init_db(path: str = DB_PATH) -> None:
     """
     Create all tables and indexes if they don't exist.
     Safe to call on every app startup — idempotent.
+    Also runs session_id migration for existing deployments.
     """
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     conn = _make_conn(path)
     try:
         conn.executescript(_SCHEMA)
         conn.commit()
+        _migrate_session_id(conn)
         log.info("DB initialised at %s", path)
     finally:
         conn.close()
+
+
+def _migrate_session_id(conn: sqlite3.Connection) -> None:
+    """Add session_id column to leads and api_usage if missing. Safe on existing DBs."""
+    for table in ('leads', 'api_usage'):
+        try:
+            cols = [r['name'] for r in conn.execute(f'PRAGMA table_info({table})').fetchall()]
+            if 'session_id' not in cols:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN session_id TEXT NOT NULL DEFAULT ''")
+                conn.commit()
+                log.info("Migrated %s: added session_id column", table)
+        except Exception as e:
+            log.debug("session_id migration skipped for %s: %s", table, e)
 
 
 # ---------------------------------------------------------------------------
@@ -265,21 +280,25 @@ def upsert_contact(conn, domain_id: int, email: str, **kwargs) -> int:
 # Lead helpers
 # ---------------------------------------------------------------------------
 
-def create_lead(conn, email: str, domain: str, purpose: str = 'job_seeker', **kwargs) -> int:
+def create_lead(conn, email: str, domain: str, purpose: str = 'job_seeker',
+                session_id: str = '', **kwargs) -> int:
     """Create a new lead. Returns lead_id."""
     now = time.time()
     cursor = conn.execute(
         '''INSERT OR IGNORE INTO leads
            (email, domain, purpose, status, created_at, updated_at,
-            first_name, last_name, position)
-           VALUES (?,?,?,?,?,?,?,?,?)''',
+            first_name, last_name, position, session_id)
+           VALUES (?,?,?,?,?,?,?,?,?,?)''',
         (email, domain, purpose, 'discovered', now, now,
-         kwargs.get('first_name', ''), kwargs.get('last_name', ''), kwargs.get('position', ''))
+         kwargs.get('first_name', ''), kwargs.get('last_name', ''), kwargs.get('position', ''),
+         session_id)
     )
     if cursor.lastrowid:
         return cursor.lastrowid
-    return conn.execute('SELECT id FROM leads WHERE email=? AND domain=? AND purpose=?',
-                        (email, domain, purpose)).fetchone()['id']
+    return conn.execute(
+        'SELECT id FROM leads WHERE email=? AND domain=? AND purpose=? AND session_id=?',
+        (email, domain, purpose, session_id)
+    ).fetchone()['id']
 
 
 def update_lead_status(conn, lead_id: int, status: str) -> None:
@@ -347,37 +366,44 @@ def get_due_sequences(conn) -> list:
 
 def log_api_call(conn, api_name: str, success: bool = True,
                  credits: int = 1, domain: str = '', endpoint: str = '',
-                 error: str = '', model: str = '') -> None:
+                 error: str = '', model: str = '', session_id: str = '') -> None:
     conn.execute(
-        '''INSERT INTO api_usage (api_name, endpoint, credits_used, domain, success, error_msg, model, ts)
-           VALUES (?,?,?,?,?,?,?,?)''',
-        (api_name, endpoint, credits, domain, int(success), error, model, time.time())
+        '''INSERT INTO api_usage (api_name, endpoint, credits_used, domain, success, error_msg, model, ts, session_id)
+           VALUES (?,?,?,?,?,?,?,?,?)''',
+        (api_name, endpoint, credits, domain, int(success), error, model, time.time(), session_id)
     )
 
 
-def get_dashboard_stats(conn) -> dict:
-    """Return summary stats for UI dashboard."""
-    domains_total   = conn.execute('SELECT count(*) FROM domains').fetchone()[0]
-    contacts_total  = conn.execute('SELECT count(*) FROM contacts').fetchone()[0]
-    leads_total     = conn.execute('SELECT count(*) FROM leads').fetchone()[0]
-    emails_sent     = conn.execute("SELECT count(*) FROM leads WHERE status='sent'").fetchone()[0]
-    emails_replied  = conn.execute("SELECT count(*) FROM leads WHERE status='replied'").fetchone()[0]
-    hunter_today    = conn.execute(
-        "SELECT COALESCE(sum(credits_used),0) FROM api_usage WHERE api_name='Hunter' AND ts > ?",
-        (time.time() - 86400,)
-    ).fetchone()[0]
-    gemini_today    = conn.execute(
-        "SELECT count(*) FROM api_usage WHERE api_name='Gemini' AND ts > ?",
-        (time.time() - 86400,)
-    ).fetchone()[0]
+def get_dashboard_stats(conn, session_id: str = '') -> dict:
+    """Return summary stats. Scoped to session_id so users see only their own data."""
+    # Domains and contacts are global knowledge (not personal data)
+    domains_total  = conn.execute('SELECT count(*) FROM domains').fetchone()[0]
+    contacts_total = conn.execute('SELECT count(*) FROM contacts').fetchone()[0]
+
+    # Leads, emails, activity are session-scoped
+    if session_id:
+        leads_total    = conn.execute("SELECT count(*) FROM leads WHERE session_id=?", (session_id,)).fetchone()[0]
+        emails_sent    = conn.execute("SELECT count(*) FROM leads WHERE status='sent' AND session_id=?", (session_id,)).fetchone()[0]
+        emails_replied = conn.execute("SELECT count(*) FROM leads WHERE status='replied' AND session_id=?", (session_id,)).fetchone()[0]
+        hunter_today   = conn.execute(
+            "SELECT COALESCE(sum(credits_used),0) FROM api_usage WHERE api_name='Hunter' AND ts > ? AND session_id=?",
+            (time.time() - 86400, session_id)
+        ).fetchone()[0]
+        gemini_today   = conn.execute(
+            "SELECT count(*) FROM api_usage WHERE api_name='Gemini' AND ts > ? AND session_id=?",
+            (time.time() - 86400, session_id)
+        ).fetchone()[0]
+    else:
+        # No session = new user, show zeros for personal stats
+        leads_total = emails_sent = emails_replied = hunter_today = gemini_today = 0
 
     return {
-        'domains_cached':  domains_total,
-        'contacts_found':  contacts_total,
-        'leads_total':     leads_total,
-        'emails_sent':     emails_sent,
-        'emails_replied':  emails_replied,
-        'reply_rate':      f'{(emails_replied / emails_sent * 100):.1f}%' if emails_sent else '—',
+        'domains_cached':       domains_total,
+        'contacts_found':       contacts_total,
+        'leads_total':          leads_total,
+        'emails_sent':          emails_sent,
+        'emails_replied':       emails_replied,
+        'reply_rate':           f'{(emails_replied / emails_sent * 100):.1f}%' if emails_sent else '—',
         'hunter_credits_today': hunter_today,
         'gemini_calls_today':   gemini_today,
     }
