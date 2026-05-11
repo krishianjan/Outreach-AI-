@@ -87,20 +87,18 @@ SQLite (WAL mode)
 
 ---
 
-## 🛠️ Tech Stack
+### 🛠️ Tech Stack
 
+⚡ FastAPI (api_routes.py)
+├── 🔍 /api/find-domain → DuckDuckGo search → domain
+├── 📧 /api/lookup → Hunter.io + 3-tier scraper → contacts[]
+├── 🤖 /api/generate → model_router → Gemini/Groq → 4-email sequence
+├── ✏️ /api/enhance → model_router → rewrite any email
+├── 💡 /api/suggest → Groq → 3 reply-rate tips
+├── 📋 /api/leads → SQLite (session-scoped)
+└── 📊 /api/stats → SQLite (session-scoped)
+▼
 
-| Layer | Tech | Badges |
-|-------|------|--------|
-| **Backend** | Python 3.11, FastAPI, Uvicorn | ![Python](https://shields.io) ![FastAPI](https://shields.io) |
-| **LLMs** | Gemini 1.5, Groq (Llama 3.3) | ![Gemini](https://shields.io) ![Llama3](https://shields.io) |
-| **Frontend** | React 18, TypeScript, Vite | ![React](https://shields.io) ![TypeScript](https://shields.io) ![Vite](https://shields.io) |
-| **Styling** | Tailwind CSS | ![TailwindCSS](https://shields.io) |
-| **Database** | SQLite (WAL mode) | ![SQLite](https://shields.io) |
-| **Scraping** | ScrapingGraph AI, BS4 | ![Scraping](https://shields.io) |
-| **Email Intel** | Hunter.io API | ![Hunter](https://shields.io) |
-| **Deployment** | HF Spaces (Docker) | ![HuggingFace](https://shields.io) ![Docker](https://shields.io) |
-| **Rate Limiting**| Token Bucket | ![Python](https://shields.io) |
 
 
 ---
