@@ -1,0 +1,8 @@
+python-dotenv
+httpx
+pandas
+gradio
+google-generativeai
+groq
+beautifulsoup4
+tenacity
