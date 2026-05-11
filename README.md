@@ -1,9 +1,8 @@
 ---
-title: Outreach AI
-emoji: 📧
-colorFrom: blue
-colorTo: indigo
-sdk: streamlit
-app_file: app.py
+title: AI Outreach Platform
+emoji: 🚀
+colorFrom: purple
+colorTo: green
+sdk: docker
 pinned: false
 ---
