@@ -164,7 +164,7 @@ def _call_gemini(
     model: str = 'gemini_flash',
     max_tokens: int = 1000,
 ) -> str:
-    """Call Gemini API. Returns raw text. Raises on error."""
+    """Call Gemini API with JSON mode enforced — eliminates all parsing failures."""
     try:
         import google.generativeai as genai
     except ImportError:
@@ -178,18 +178,19 @@ def _call_gemini(
     if not config.GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY not set in .env")
 
-    # Throttle + budget check
     gemini_throttle.consume_blocking()
     gemini_budget.spend(1)
 
     genai.configure(api_key=config.GEMINI_API_KEY)
+
     client = genai.GenerativeModel(
         model_name=model_name,
         system_instruction=system_prompt,
-        generation_config={
-            'max_output_tokens': max_tokens,
-            'temperature': 0.7,
-        },
+        generation_config=genai.GenerationConfig(
+            max_output_tokens=max_tokens,
+            temperature=0.7,
+            response_mime_type="application/json",  # FORCES valid JSON — no fences, no preamble
+        ),
     )
 
     response = client.generate_content(user_prompt)

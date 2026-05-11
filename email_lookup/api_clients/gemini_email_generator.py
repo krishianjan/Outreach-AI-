@@ -57,8 +57,10 @@ MANDATORY EMAIL STRUCTURE — follow this EXACTLY, no exceptions:
 
 RULES — violating any of these makes the email worthless:
 1. Body MUST be 150-200 words — not a summary, not bullet points, a complete professional email
-2. Subject lines MUST be specific: contain the company name OR a specific technology/project/role — NEVER generic phrases
-3. ABSOLUTELY FORBIDDEN in subject lines: "Revolutionizing", "Optimizing", "Transforming", "Leveraging", "Synergy", "Game-changing", "Disruptive", "Innovative", "Solutions"
+2. Subject lines MUST be specific. Study these examples:
+   BAD (never write these): "An ML Perspective for Kalshi" · "Exploring ML for [Company]" · "Quick thought on [Company]'s markets" · "Enhancing [Company] with AI" · "AI-Driven insights for [Company]"
+   GOOD (write like these): "Built a prediction engine for event markets — want to see it?" · "Your market microstructure + engineer who shipped similar at Harvard" · "Saw Kalshi's new contract types — built something related last week"
+   Rule: subject must make the reader think "how does this person know about that?" — not "another AI pitch"
 4. ABSOLUTELY FORBIDDEN anywhere: "I hope this finds you well", "touch base", "circle back", "hop on a call", "reach out", "utilize", "leverage", "synergy", "disruptive"
 5. If user provided a rough draft: extract every fact, skill, project, metric, and URL from it — do NOT ignore the draft
 6. P.S. line: ONLY include if real GitHub/portfolio/demo URLs were provided. If none, leave ps_line as empty string ""
