@@ -219,65 +219,101 @@ def _parse_sequence(result: dict, contact: dict) -> dict:
     model  = result.get('model_used', 'unknown')
     fname  = contact.get('first_name', 'there')
 
-    if parsed and isinstance(parsed, dict) and parsed.get('body'):
-        body = parsed.get('body', raw)
-        # Validate body has proper structure — if it doesn't, that's the model's fault but we report it
-        has_greeting  = body.strip().startswith('Hi ') or body.strip().startswith('Dear ')
-        word_count    = len(body.split())
+    # ── Secondary parse attempt ────────────────────────────────────────────
+    # If primary JSON parse failed but raw text contains JSON, try again.
+    # Groq sometimes adds preamble like "Here is the email:" before JSON.
+    if not parsed and raw:
+        import re as _re
+        try:
+            parsed = json.loads(raw.strip())
+        except Exception:
+            m = _re.search(r'\{[\s\S]*\}', raw)
+            if m:
+                try:
+                    parsed = json.loads(m.group(0))
+                except Exception:
+                    pass
 
-        log.info("Email generated: model=%s words=%d greeting=%s", model, word_count, has_greeting)
-
+    # ── Use parsed JSON ────────────────────────────────────────────────────
+    # BUG WAS HERE: `parsed.get('body')` is FALSY when body is empty string.
+    # Correct check: only require parsed to be a dict, not body to be truthy.
+    if parsed and isinstance(parsed, dict):
+        body     = parsed.get('body', '')
         subjects = parsed.get('subject_lines', [])
+
+        # Guard: if body looks like raw JSON, the model put JSON inside body — reset
+        body_stripped = (body or '').strip()
+        if body_stripped.startswith('{') or body_stripped.startswith('['):
+            body = ''
+
+        # If body is still empty, build a minimal placeholder the user can Enhance
+        if not body:
+            body = (
+                f"Hi {fname},\n\n"
+                f"[Email body was not generated. Click ✨ Enhance to regenerate.]\n\n"
+                f"Best,\n[Your Name]"
+            )
+
+        word_count = parsed.get('word_count', len(body.split()))
+        log.info("Email parsed OK: model=%s words=%d subjects=%d", model, word_count, len(subjects))
+
         return {
-            'success': True,
+            'success':    True,
             'model_used': model,
             'day_0': {
-                'subject':          subjects[0] if subjects else 'Following up',
+                'subject':          subjects[0] if subjects else 'Quick question',
                 'subject_variants': subjects,
                 'body':             body,
                 'ps_line':          parsed.get('ps_line', ''),
                 'tone':             parsed.get('tone', 'direct'),
-                'word_count':       parsed.get('word_count', word_count),
+                'word_count':       word_count,
             },
             'day_3': {
-                'subject': f"Re: {subjects[0]}" if subjects else 'Quick follow-up',
-                'body':    parsed.get('follow_up_day3', f"Hi {fname},\n\nJust checking if my last note reached you — happy to share more context or adjust the approach.\n\nBest,\n[Name]"),
+                'subject': f"Re: {subjects[0]}" if subjects else 'Following up',
+                'body':    parsed.get('follow_up_day3',
+                    f"Hi {fname},\n\nJust checking if my last note reached you — happy to share more context.\n\nBest,\n[Name]"),
                 'subject_variants': [],
             },
             'day_7': {
                 'subject': 'Still relevant?',
-                'body':    parsed.get('follow_up_day7', f"Hi {fname},\n\nQuick bump on my previous note — still think this could be valuable for you, but totally understand if the timing is off.\n\nBest,\n[Name]"),
+                'body':    parsed.get('follow_up_day7',
+                    f"Hi {fname},\n\nQuick bump on my earlier note — no pressure if timing is off.\n\nBest,\n[Name]"),
                 'subject_variants': [],
             },
             'day_14': {
                 'subject': 'Closing the loop',
-                'body':    parsed.get('follow_up_day14', f"Hi {fname},\n\nI'll assume the timing isn't right — no worries at all. Feel free to reach out if that changes. Best of luck with everything you're building.\n\nBest,\n[Name]"),
+                'body':    parsed.get('follow_up_day14',
+                    f"Hi {fname},\n\nClosing this out — feel free to reach out whenever it makes sense.\n\nBest,\n[Name]"),
                 'subject_variants': [],
             },
             'raw_text': raw,
         }
 
-    # Plain text fallback — model returned text instead of JSON
-    log.warning("JSON parse failed — using plain text body. model=%s len=%d", model, len(raw))
-    subjects_fallback = [
-        f"Quick question for {contact.get('first_name','you')} at {contact.get('domain','')}",
-        f"Your work at {contact.get('domain','your company')} + a thought from me",
+    # ── Plain-text fallback ────────────────────────────────────────────────
+    # Model returned plain text (not JSON). Use as body only if it's not JSON.
+    log.warning("JSON parse failed entirely. model=%s raw_len=%d", model, len(raw))
+    safe_body = raw if raw and not raw.strip().startswith('{') else (
+        f"Hi {fname},\n\n[Click ✨ Enhance to generate the email — model returned unexpected format]\n\nBest,\n[Name]"
+    )
+    fallback_subjects = [
+        f"Quick question about {contact.get('domain', 'your company')}",
         f"Worth a 15-min call?",
+        f"Thought this might be relevant",
     ]
     return {
-        'success': True,
+        'success':    True,
         'model_used': model,
         'day_0': {
-            'subject':          subjects_fallback[0],
-            'subject_variants': subjects_fallback,
-            'body':             raw or f"Hi {fname},\n\n[Email generation returned plain text — paste your draft here]\n\nBest,\n[Name]",
+            'subject':          fallback_subjects[0],
+            'subject_variants': fallback_subjects,
+            'body':             safe_body,
             'ps_line':          '',
             'tone':             'direct',
-            'word_count':       len(raw.split()),
+            'word_count':       len(safe_body.split()),
         },
-        'day_3':  {'subject': 'Following up',    'body': f"Hi {fname},\n\nJust checking in on my previous note.\n\nBest,\n[Name]", 'subject_variants': []},
-        'day_7':  {'subject': 'Quick bump',       'body': f"Hi {fname},\n\nOne last nudge — happy to adjust if the timing or approach isn't right.\n\nBest,\n[Name]", 'subject_variants': []},
-        'day_14': {'subject': 'Closing the loop', 'body': f"Hi {fname},\n\nClosing this out — no pressure at all. Hope everything's going well.\n\nBest,\n[Name]", 'subject_variants': []},
+        'day_3':  {'subject': 'Following up',    'body': f"Hi {fname},\n\nJust checking in.\n\nBest,\n[Name]",              'subject_variants': []},
+        'day_7':  {'subject': 'Quick bump',       'body': f"Hi {fname},\n\nOne last nudge.\n\nBest,\n[Name]",               'subject_variants': []},
+        'day_14': {'subject': 'Closing the loop', 'body': f"Hi {fname},\n\nNo worries — reach out whenever.\n\nBest,\n[Name]", 'subject_variants': []},
         'raw_text': raw,
     }
 
