@@ -12,28 +12,7 @@ An autonomous outreach engine that takes a company name → finds decision-maker
 
 ---
 
-## Resume Bullets
 
-```
-• Engineered a full-stack AI outreach platform (FastAPI + React/TypeScript) with a
-  multi-model LLM router that selects between Gemini 1.5 Flash and Groq Llama 3.3 70B
-  based on task type — email drafts to Gemini (reliable JSON mode), real-time subject
-  lines to Groq (<500ms) — eliminating a 100% JSON parse failure rate caused by model
-  routing to the wrong backend.
-
-• Built a 3-tier contact discovery pipeline (Hunter.io API → ScrapingGraph AI NL
-  extraction → httpx + BeautifulSoup fallback) with email pattern inference from known
-  samples and SMTP/MX verification, achieving contact discovery across startup domains
-  with API credit protection via token bucket throttling and per-key rotation pools.
-
-• Implemented browser-session-scoped data isolation using UUID headers (X-Session-ID)
-  propagated through FastAPI → SQLite WAL, enabling multi-user access from a single
-  HF Spaces Docker deployment with zero data leakage between concurrent users —
-  deployed via multi-stage Dockerfile (Node → Python) with secrets managed via HF
-  repository secrets.
-```
-
----
 
 ## Feature Breakdown
 
@@ -108,19 +87,21 @@ SQLite (WAL mode)
 
 ---
 
-## Tech Stack
+## 🛠️ Tech Stack
 
-| Layer | Tech |
-|-------|------|
-| **Backend** | Python 3.11, FastAPI, Uvicorn |
-| **LLMs** | Google Gemini 1.5 Flash/Pro, Groq (Llama 3.3 70B) |
-| **Frontend** | React 18, TypeScript, Vite, Tailwind CSS |
-| **Database** | SQLite (WAL mode), no ORM |
-| **Scraping** | ScrapingGraph AI, httpx, BeautifulSoup4, lxml |
-| **Email Intel** | Hunter.io API, dnspython, Python socket (SMTP) |
-| **Deployment** | HF Spaces (Docker), multi-stage Dockerfile |
-| **Rate Limiting** | Token bucket (pure Python), per-API budget tracker |
-| **Auth** | Sessionless — UUID-per-tab scoping |
+
+| Layer | Tech | Badges |
+|-------|------|--------|
+| **Backend** | Python 3.11, FastAPI, Uvicorn | ![Python](https://shields.io) ![FastAPI](https://shields.io) |
+| **LLMs** | Gemini 1.5, Groq (Llama 3.3) | ![Gemini](https://shields.io) ![Llama3](https://shields.io) |
+| **Frontend** | React 18, TypeScript, Vite | ![React](https://shields.io) ![TypeScript](https://shields.io) ![Vite](https://shields.io) |
+| **Styling** | Tailwind CSS | ![TailwindCSS](https://shields.io) |
+| **Database** | SQLite (WAL mode) | ![SQLite](https://shields.io) |
+| **Scraping** | ScrapingGraph AI, BS4 | ![Scraping](https://shields.io) |
+| **Email Intel** | Hunter.io API | ![Hunter](https://shields.io) |
+| **Deployment** | HF Spaces (Docker) | ![HuggingFace](https://shields.io) ![Docker](https://shields.io) |
+| **Rate Limiting**| Token Bucket | ![Python](https://shields.io) |
+
 
 ---
 
