@@ -139,6 +139,32 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Quick Start Summary */}
+      <div style={{
+        background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(168, 85, 247, 0.05) 100%)',
+        borderRadius: 16, padding: '24px', marginBottom: 24,
+        border: '1px solid var(--border-custom)', display: 'grid',
+        gridTemplateColumns: 'repeat(4, 1fr)', gap: 20
+      }}>
+        {[
+          { icon: <Users size={18} />, title: "1. Discover", desc: "Find decision-makers at any domain using AI search." },
+          { icon: <Zap size={18} />, title: "2. Verify", desc: "Real-time SMTP checks to eliminate email bounces." },
+          { icon: <Mail size={18} />, title: "3. Personalize", desc: "Generate 4-day AI sequences tailored to their role." },
+          { icon: <TrendingUp size={18} />, title: "4. Track", desc: "Manage your pipeline from lead to booked meeting." },
+        ].map((step, i) => (
+          <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: 8, background: 'var(--bg-elevated)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-indigo)'
+            }}>
+              {step.icon}
+            </div>
+            <h4 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>{step.title}</h4>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>{step.desc}</p>
+          </div>
+        ))}
+      </div>
+
       {/* Stats grid — row 1 */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 14 }}>
         {card(stats.domains_cached, 'Domains Cached', 'var(--color-slate)', Database)}
